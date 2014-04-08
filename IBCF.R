@@ -1,0 +1,5 @@
+library("recommenderlab")
+m57x57 <- read.csv("../DenserMatr.csv",header=T,colClasses=c("character",rep("numeric",57)))
+tmpMatr <- as(m57x57[-1],"matrix")
+rrm57x57 <- as(tmpMatr,"realRatingMatrix")
+rec <- Recommender(rrm57x57[-56:-57,],method="IBCF")
