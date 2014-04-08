@@ -1,18 +1,15 @@
 library("recommenderlab")
-options("scipen"=100, "digits"=4)
 
 setwd("C:/TW-Projects/PS-Projects/AbcamAnalytics/RSandbox/recommender/")
 weightsDF <- read.csv(file="FinalWeightsCombined",sep="\t",colClasses=c("character","character","numeric"))
 colnames(weightsDF)<- c("user","abIDs","weight")
 targetUserID <- "-3685863687683693081"
-length(unique(weightsDF[,1]))
 
 viewedPages <- weightsDF[which(weightsDF[,1]==targetUserID),2]
 usersWhoViewedTheSomeOfThosePages <- unique(weightsDF[weightsDF[,2] %in% viewedPages,1:2])
 pagesViewsBySimilarUsers <- aggregate(usersWhoViewedTheSomeOfThosePages[-1],usersWhoViewedTheSomeOfThosePages[1],c)
 pagesViewsBySimilarUsers$Count <- sapply(1:max(row(pagesViewsBySimilarUsers)),
-                                         function(x){return (length(unlist(pagesViewsBySimilarUsers[x,2])));}
-                                        )
+                                         function(x){return (length(unlist(pagesViewsBySimilarUsers[x,2])));})
 sortedDF <- pagesViewsBySimilarUsers[order(pagesViewsBySimilarUsers$Count,decreasing=T),]
 sortedDF <- sortedDF[-1,]
 mostRelevantUsers <- sortedDF[1:10,1]
@@ -30,7 +27,6 @@ distMatr <- distMatr[order(distMatr[,1]),]
 distMatr <- cbind(distMatr,tmpMatr[,-1])
 distMatr <- rbind(distMatr[distMatr[,1] == targetUserID,], distMatr[distMatr[,1]!=targetUserID,])
 colnames(distMatr)[1] <- "userID"
-
 numericDistMatr <- matrix(as.numeric(distMatr[,-1]),nrow=11)
 colnames(numericDistMatr) <- colnames(distMatr)[-1]
 distanceMatr <- dist(numericDistMatr,method="Manhattan",diag=T,upper=T)
