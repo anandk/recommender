@@ -5,7 +5,7 @@ setwd("C:/TW-Projects/PS-Projects/AbcamAnalytics/RSandbox/recommender/")
 weightsDF <- read.csv(file="FinalWeightsCombined",sep="\t",colClasses=c("character","character","numeric"))
 colnames(weightsDF)<- c("user","abIDs","weight")
 targetUserID <- "-3685863687683693081"
-
+length(unique(weightsDF[,1]))
 
 viewedPages <- weightsDF[which(weightsDF[,1]==targetUserID),2]
 usersWhoViewedTheSomeOfThosePages <- unique(weightsDF[weightsDF[,2] %in% viewedPages,1:2])
@@ -42,34 +42,8 @@ weightsMatrix <- matrix(userRelevanceWeights,nrow=10)
 weightedRecom <- numericDistMatr[-1,] * weightsMatrix[,1]
 weightedRecom <- rbind(weightedRecom,colSums(weightedRecom))
 nonZeroCols <- weightedRecom[,weightedRecom[11,]>0]
-
-
-df2 <- as.data.frame(cbind(countLevelOfSimilarity[,1],as.numeric(countLevelOfSimilarity[,2])))
-df2[,2]<- as.numeric(levels(df2[,2]))[as.integer(df2[,2])]
-df2[,1] <- as.character(df2[,1])
-df2[df2[1]==targetUserID,2] <- 0
-sortedDF2 <- df2[order(df2[,2],decreasing=T),]
-similarUsers <- sortedDF2[1:10,1]
-distMatr <- matrix(nrow=11,ncol=1,data=0)
-colnames(distMatr) <- unique(weightsDF[,2])
-df33 <- data.frame()
-allPagesViewedBySelectedUsers <- sapply(c(targetUserID,similarUsers),
-                                        function(x){
-                                        df33 <<- rbind(df33,weightsDF[weightsDF[,1]==x,]);
-                                        })
-
-
-
-#levelOfInterest <- sapply(usersWhoViewedTheSomeOfThosePages[,1],function(x){return (intersect(
-#  viewedPages,
-#  usersWhoViewedTheSomeOfThosePages[usersWhoViewedTheSomeOfThosePages[,1]==x,2]));})
-#matrLevelOfInterest <- as.matrix(levelOfInterest)
-#dfLevelOfSimilarity <- unique(as.data.frame(matrLevelOfInterest))
-#countLevelOfSimilarity <- t(sapply(1:length(unique(matrLevelOfInterest[,1])),function(x){return (
-#  unlist(
-#    (c(row.names(matrLevelOfInterest)[x],
-#       length(unlist(matrLevelOfInterest[x]))
-#    )
-#    )
-#  )
-#);}))
+eleventhRow <- nonZeroCols[11,]
+df11Row <- as.data.frame(eleventhRow)
+df11Row$AbIDs <- row.names(df11Row)
+df11Row <- df11Row[order(df11Row[,1],decreasing=T),]
+newPagesToBeRecommended <- setdiff(df11Row[,2],viewedPages)
