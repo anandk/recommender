@@ -1,45 +1,67 @@
 library("recommenderlab")
 
 setwd("C:/TW-Projects/PS-Projects/AbcamAnalytics/RSandbox/recommender/")
-weightsDF <- read.csv(file="FinalWeightsCombined",sep="\t",colClasses=c("character","character","numeric"))
-colnames(weightsDF)<- c("user","abIDs","weight")
+
 targetUserID <- "-3685863687683693081"
 
-viewedPages <- weightsDF[which(weightsDF[,1]==targetUserID),2]
-usersWhoViewedTheSomeOfThosePages <- unique(weightsDF[weightsDF[,2] %in% viewedPages,1:2])
-pagesViewsBySimilarUsers <- aggregate(usersWhoViewedTheSomeOfThosePages[-1],usersWhoViewedTheSomeOfThosePages[1],c)
-pagesViewsBySimilarUsers$Count <- sapply(1:max(row(pagesViewsBySimilarUsers)),
-                                         function(x){return (length(unlist(pagesViewsBySimilarUsers[x,2])));})
-sortedDF <- pagesViewsBySimilarUsers[order(pagesViewsBySimilarUsers$Count,decreasing=T),]
-sortedDF <- sortedDF[-1,]
-mostRelevantUsers <- sortedDF[1:10,1]
-meAndRelevantUserViews <- weightsDF[weightsDF[,1] %in% c(targetUserID,mostRelevantUsers),]
-rrm <- as(meAndRelevantUserViews,"realRatingMatrix")
-tmpdgcMatrix <- as(rrm,"dgCMatrix")
-tmpMatr <- cbind(row.names(tmpMatr),as(tmpdgcMatrix,"matrix"))
-tmpMatr <- tmpMatr[order(tmpMatr[,1]),]
-allUniqueAbIDs <- unique(weightsDF[,2])
-abIDsNotViewedByRelevantUsers <- setdiff(unique(weightsDF[,2]),colnames(tmpMatr))
-distMatr <- matrix(nrow=11,ncol=length(abIDsNotViewedByRelevantUsers),data=0)
-colnames(distMatr) <- abIDsNotViewedByRelevantUsers
-distMatr <- cbind(c(targetUserID,mostRelevantUsers),distMatr)
-distMatr <- distMatr[order(distMatr[,1]),]
-distMatr <- cbind(distMatr,tmpMatr[,-1])
-distMatr <- rbind(distMatr[distMatr[,1] == targetUserID,], distMatr[distMatr[,1]!=targetUserID,])
-colnames(distMatr)[1] <- "userID"
-numericDistMatr <- matrix(as.numeric(distMatr[,-1]),nrow=11)
-colnames(numericDistMatr) <- colnames(distMatr)[-1]
-distanceMatr <- dist(numericDistMatr,method="Manhattan",diag=T,upper=T)
+getRecommendations <- function(file,targetUser,numRecommendations=10,numRankedUsers=10) {
+  userPreferencesDF <- read.csv(file=file,
+                                sep="\t",
+                                colClasses=c("character","character","numeric"),
+                                header=FALSE)
+  userColumn <- "user"
+  itemColumn <- "itemIDs"
+  weightColumn <- "weight"
+  
+  colnames(userPreferencesDF)<- c(userColumn,itemColumn,weightColumn)
+  viewedPages <- userPreferencesDF[which(userPreferencesDF[,userColumn]==targetUserID),itemColumn]
+  usersWhoViewedSomeOfThosePages <- unique(userPreferencesDF[userPreferencesDF[,itemColumn] %in% viewedPages,
+                                                             c(userColumn,itemColumn)])
+  pagesViewsBySimilarUsers <- aggregate(usersWhoViewedSomeOfThosePages[-1], #All the columns except the user column
+                                        usersWhoViewedSomeOfThosePages[1],  #Group by user ID
+                                        c)                                  #Concatenate all the item IDs per user
+  pagesViewsBySimilarUsers$Count <- sapply(1:max(row(pagesViewsBySimilarUsers)), #Do this for all relevant users
+                                           function(x){
+                                             return (length(unlist(pagesViewsBySimilarUsers[x,2])));
+                                           })
+  rankedUsersDF <- pagesViewsBySimilarUsers[order(pagesViewsBySimilarUsers$Count,decreasing=T),]
+  rankedUsersDF <- rankedUsersDF[-1,]
+  mostRelevantUsers <- rankedUsersDF[1:numRankedUsers,1]
+  pageViewDataOfTargetAndSimilarUsers <- userPreferencesDF[userPreferencesDF[,1] %in% c(targetUserID,mostRelevantUsers),]
+  tmpMatrix <- as(as(as(pageViewDataOfTargetAndSimilarUsers,"realRatingMatrix"),"dgCMatrix"),"matrix")
+  relevantUsersPageViewsMX <- cbind(row.names(tmpMatrix),tmpMatrix)
+  relevantUsersPageViewsMX <- relevantUsersPageViewsMX[order(relevantUsersPageViewsMX[,1]),]
+  itemsViewedByRelevantUsers <- colnames(relevantUsersPageViewsMX)
+  allUniqueAbIDs <- unique(userPreferencesDF[,2])
+  abIDsNotViewedByRelevantUsers <- setdiff(unique(userPreferencesDF[,2]),itemsViewedByRelevantUsers)
+  baseMX <- matrix(nrow=numRankedUsers+1, #Since we will also include target user
+                   ncol=length(abIDsNotViewedByRelevantUsers),
+                   data=0)  #Initialise
+  colnames(baseMX) <- abIDsNotViewedByRelevantUsers
+  relevantUsersPrefsForAllItems <- cbind(c(targetUserID,mostRelevantUsers),baseMX)
+  relevantUsersPrefsForAllItems <- relevantUsersPrefsForAllItems[order(relevantUsersPrefsForAllItems[,1]),]
+  relevantUsersPrefsForAllItems <- cbind(relevantUsersPrefsForAllItems,relevantUsersPageViewsMX[,-1])
+  relevantUsersPrefsForAllItems <- rbind(relevantUsersPrefsForAllItems[relevantUsersPrefsForAllItems[,1] == targetUserID,], 
+                                         relevantUsersPrefsForAllItems[relevantUsersPrefsForAllItems[,1] != targetUserID,])
+  colnames(relevantUsersPrefsForAllItems)[1] <- "userID"
+  userPageViewMatrixForDistanceComputation <- matrix(as.numeric(relevantUsersPrefsForAllItems[,-1]),
+                                                     nrow=numRankedUsers+1) 
+  colnames(userPageViewMatrixForDistanceComputation) <- colnames(relevantUsersPrefsForAllItems)[-1]
+  distanceMX <- dist(userPageViewMatrixForDistanceComputation,
+                     method="Manhattan", #TODO Parametrise
+                     diag=T,
+                     upper=T)
+  relevantUsersWeights <- as.matrix(distanceMX)[1,-1]
+  highestWeight <- min(relevantUsersWeights)
+  relevantUsersNormalWeights <- highestWeight/relevantUsersWeights
+  relevantUsersNormalWeightsMX <- matrix(relevantUsersNormalWeights,nrow=numRankedUsers)
+  weightedPagePreferenceMX <- userPageViewMatrixForDistanceComputation[-1,] * relevantUsersNormalWeightsMX[,1]
+  weightedPagePreferenceMX <- rbind(weightedPagePreferenceMX,colSums(weightedPagePreferenceMX))
+  pageRanks <- as.data.frame(weightedPagePreferenceMX[(numRankedUsers+1),weightedPagePreferenceMX[(numRankedUsers+1),]>0]) #TODO : parameterise
+  pageRanks$AbIDs <- row.names(pageRanks)
+  pageRanks <- pageRanks[order(pageRanks[,1],decreasing=TRUE),]
+  newPagesToBeRecommended <- setdiff(pageRanks[,"AbIDs"],viewedPages)
+  return (newPagesToBeRecommended[1:numRecommendations])
+}
 
-userRelevanceWeights <- as.matrix(distanceMatr)[1,-1]
-highestWeight <- min(userRelevanceWeights)
-userRelevanceWeights <- highestWeight/userRelevanceWeights
-weightsMatrix <- matrix(userRelevanceWeights,nrow=10)
-weightedRecom <- numericDistMatr[-1,] * weightsMatrix[,1]
-weightedRecom <- rbind(weightedRecom,colSums(weightedRecom))
-nonZeroCols <- weightedRecom[,weightedRecom[11,]>0]
-eleventhRow <- nonZeroCols[11,]
-df11Row <- as.data.frame(eleventhRow)
-df11Row$AbIDs <- row.names(df11Row)
-df11Row <- df11Row[order(df11Row[,1],decreasing=T),]
-newPagesToBeRecommended <- setdiff(df11Row[,2],viewedPages)
+getRecommendations("FinalWeightsCombined",targetUserID)
