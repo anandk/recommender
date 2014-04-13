@@ -1,14 +1,16 @@
 library("recommenderlab")
 
 setwd("C:/TW-Projects/PS-Projects/AbcamAnalytics/RSandbox/recommender/")
-
+userItemsWeightsDF <- read.csv(file="FinalWeightsCombined",
+                              sep="\t",
+                              colClasses=c("character","character","numeric"),
+                              header=FALSE)
 targetUserID <- "-3685863687683693081"
 
-getRecommendations <- function(file,targetUser,numRecommendations=10,numRankedUsers=10) {
-  userPreferencesDF <- read.csv(file=file,
-                                sep="\t",
-                                colClasses=c("character","character","numeric"),
-                                header=FALSE)
+getRecommendations <- function(userPreferencesDF,     #data frame containing the user-items-weights
+                               targetUser,            #user for whom recommendations are sought
+                               numRecommendations=10, #Number of recommendations required
+                               numRankedUsers=10) {   #Number of similar users to consider
   userColumn <- "user"
   itemColumn <- "itemIDs"
   weightColumn <- "weight"
@@ -64,4 +66,4 @@ getRecommendations <- function(file,targetUser,numRecommendations=10,numRankedUs
   return (newPagesToBeRecommended[1:numRecommendations])
 }
 
-getRecommendations("FinalWeightsCombined",targetUserID)
+getRecommendations(userItemsWeightsDF,targetUserID)
