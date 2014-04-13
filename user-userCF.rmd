@@ -1,0 +1,206 @@
+User-User Collaborative Filtering
+========================================================
+
+Assumptions: The input data file is in the format "user item  weight" (tsv file with each entry on a new line & no header)
+Other Inputs: user, number of recommendations, distance method, number of similar users to consider
+
+```{r message=FALSE,echo=FALSE}
+
+library("recommenderlab")
+
+setwd("~/") #TODO: Pick the right path
+userPreferencesDF <- read.csv(file="Abcam//AbcamSnowplow/redshiftetl/src/R/FinalWeightsCombined", #TODO: Parameterise
+                              sep="\t",
+                              colClasses=c("character","character","numeric"),
+                              header=FALSE)
+```
+
+Sample input file is as follows:
+
+```{r echo=FALSE}
+head(userPreferencesDF)
+```
+
+Processing inputs...
+
+```{r}
+userColumn <- "user"
+itemColumn <- "itemIDs"
+weightColumn <- "weight"
+
+colnames(userPreferencesDF)<- c(userColumn,itemColumn,weightColumn)
+targetUserID <- "-3685863687683693081" #TODO Parameterise
+```
+
+Extract all those pages that the target user has viewed (irrespective of weights)
+
+```{r}
+viewedPages <- userPreferencesDF[which(userPreferencesDF[,userColumn]==targetUserID),itemColumn]
+```
+
+For this target user the pages viewed are:
+
+```{r echo=FALSE}
+print(viewedPages)
+```
+
+Fetch all users who have viewed at least one of these viewed pages
+
+```{r}
+usersWhoViewedSomeOfThosePages <- unique(userPreferencesDF[userPreferencesDF[,itemColumn] %in% viewedPages,
+                                                           c(userColumn,itemColumn)])
+```
+
+This is how many such users exist in the data file
+
+```{r echo=FALSE}
+print(dim(usersWhoViewedSomeOfThosePages))
+```
+
+Now that we have the relevant users, find all the pages that they viewed
+
+```{r}
+pagesViewsBySimilarUsers <- aggregate(usersWhoViewedSomeOfThosePages[-1], #All the columns except the user column
+                                      usersWhoViewedSomeOfThosePages[1],  #Group by user ID
+                                      c)                                  #Concatenate all the item IDs per user
+```
+
+Now, per user count how many items are similar between this user & the target user
+
+```{r}
+pagesViewsBySimilarUsers$Count <- sapply(1:max(row(pagesViewsBySimilarUsers)), #Do this for all relevant users
+                                         function(x){
+                                           return (length(unlist(pagesViewsBySimilarUsers[x,2])));
+                                           })
+```
+
+Post aggregation, this is how the processed data will look
+
+```{r echo=FALSE}
+head(pagesViewsBySimilarUsers)
+```
+
+Now we shall compute the rank of each user based on the number of pages in common with target user. We shall pick only the top N similar users.
+
+```{r}
+rankedUsersDF <- pagesViewsBySimilarUsers[order(pagesViewsBySimilarUsers$Count,decreasing=T),]
+rankedUsersDF <- rankedUsersDF[-1,]
+mostRelevantUsers <- rankedUsersDF[1:10,1] #TODO parameterise
+```
+
+These are the most relevant users for this target user:
+
+```{r echo=FALSE}
+print(mostRelevantUsers)
+```
+
+Now that we have the top N similar users, go back to the input file & extract all their page views alongwith the data for the target user
+
+```{r}
+pageViewDataOfTargetAndSimilarUsers <- userPreferencesDF[userPreferencesDF[,1] %in% c(targetUserID,mostRelevantUsers),]
+```
+
+The following code helps convert the data which is in a single-line-per-user-per-page-activity into a matrix of users & items with the weights in the appropriate cells. To keep data consistent across data structures, we will sort by user IDs
+
+```{r}
+tmpMatrix <- as(as(as(pageViewDataOfTargetAndSimilarUsers,"realRatingMatrix"),"dgCMatrix"),"matrix")
+relevantUsersPageViewsMX <- cbind(row.names(tmpMatrix),tmpMatrix)
+relevantUsersPageViewsMX <- relevantUsersPageViewsMX[order(relevantUsersPageViewsMX[,1]),]
+itemsViewedByRelevantUsers <- colnames(relevantUsersPageViewsMX)
+```
+
+The transformation in data is shown below. 
+
+Before : 
+
+```{r echo=FALSE}
+head(pageViewDataOfTargetAndSimilarUsers)
+```
+
+After : 
+
+```{r echo=FALSE}
+print(relevantUsersPageViewsMX[1:5, 1:5])
+```
+
+Identify all the items for which we have data as well as that subset which our relevant users have not viewed.
+
+```{r}
+allUniqueAbIDs <- unique(userPreferencesDF[,2])
+abIDsNotViewedByRelevantUsers <- setdiff(unique(userPreferencesDF[,2]),itemsViewedByRelevantUsers)
+```
+
+Prepare a matrix which will be used to compute distances
+
+```{r}
+baseMX <- matrix(nrow=11, #TODO parameterise as N+1
+                   ncol=length(abIDsNotViewedByRelevantUsers),
+                   data=0)  #Initialise
+
+colnames(baseMX) <- abIDsNotViewedByRelevantUsers
+relevantUsersPrefsForAllItems <- cbind(c(targetUserID,mostRelevantUsers),baseMX)
+relevantUsersPrefsForAllItems <- relevantUsersPrefsForAllItems[order(relevantUsersPrefsForAllItems[,1]),]
+relevantUsersPrefsForAllItems <- cbind(relevantUsersPrefsForAllItems,relevantUsersPageViewsMX[,-1])
+relevantUsersPrefsForAllItems <- rbind(relevantUsersPrefsForAllItems[relevantUsersPrefsForAllItems[,1] == targetUserID,], 
+                                       relevantUsersPrefsForAllItems[relevantUsersPrefsForAllItems[,1] != targetUserID,])
+colnames(relevantUsersPrefsForAllItems)[1] <- "userID"
+userPageViewMatrixForDistanceComputation <- matrix(as.numeric(relevantUsersPrefsForAllItems[,-1]),
+                                                   nrow=11) #TODO Parameterise as N+1
+colnames(userPageViewMatrixForDistanceComputation) <- colnames(relevantUsersPrefsForAllItems)[-1]
+```
+
+Compute the distance using the appropriate method. This will result in an NxN matrix.
+
+```{r}
+distanceMX <- dist(userPageViewMatrixForDistanceComputation,
+                     method="Manhattan", #TODO Parametrise
+                     diag=T,
+                     upper=T)
+
+relevantUsersWeights <- as.matrix(distanceMX)[1,-1]
+```
+
+Here is the distance of users from each other. We are interested in the first row which is the distance from the target user.
+
+```{r echo=FALSE}
+print(relevantUsersWeights)
+```
+
+The weight for each user is inversely proportional to distance. Hence, we assign 1/distance, normalised to the closest user, as the weight. The weights are in range [0:1] and the most similar user has a weight 1.
+
+```{r}
+highestWeight <- min(relevantUsersWeights)
+relevantUsersNormalWeights <- highestWeight/relevantUsersWeights
+relevantUsersNormalWeightsMX <- matrix(relevantUsersNormalWeights,nrow=10) # TODO: parameterise
+```
+
+These are the weights for each user. 
+
+```{r echo=FALSE}
+print(relevantUsersNormalWeightsMX)
+```
+
+Apply the weights to the relevant users X pages matrix. Find the weights for each item. 
+
+```{r}
+weightedPagePreferenceMX <- userPageViewMatrixForDistanceComputation[-1,] * relevantUsersNormalWeightsMX[,1]
+weightedPagePreferenceMX <- rbind(weightedPagePreferenceMX,colSums(weightedPagePreferenceMX))
+pageRanks <- as.data.frame(weightedPagePreferenceMX[11,weightedPagePreferenceMX[11,]>0]) #TODO : parameterise
+```
+
+Order the pages by rank, remove the viewed pages & pick the top N as recommendations.
+
+```{r}
+pageRanks$AbIDs <- row.names(pageRanks)
+pageRanks <- pageRanks[order(pageRanks[,1],decreasing=TRUE),]
+newPagesToBeRecommended <- setdiff(pageRanks[,"AbIDs"],viewedPages)
+```
+
+Thus, the recommended pages are:
+
+```{r echo=FALSE}
+print(newPagesToBeRecommended[1:10]) #TODO Parameterise number of recommendations to provide
+```
+
+Thank you!
+
