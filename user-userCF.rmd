@@ -201,6 +201,3 @@ Thus, the recommended pages are:
 ```{r echo=FALSE}
 print(newPagesToBeRecommended[1:10]) #TODO Parameterise number of recommendations to provide
 ```
-
-Thank you!
-
