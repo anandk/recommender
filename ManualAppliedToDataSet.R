@@ -3,9 +3,7 @@ library("recommenderlab")
 setwd("C:/TW-Projects/PS-Projects/AbcamAnalytics/RSandbox/recommender/")
 weightsDF <- read.csv(file="FinalWeightsCombined",sep="\t",colClasses=c("character","character","numeric"))
 colnames(weightsDF)<- c("user","abIDs","weight")
-targetUserID <- "-3685863687683693081"
 
-viewedPages <- weightsDF[which(weightsDF[,1]==targetUserID),2]
 usersWhoViewedTheSomeOfThosePages <- unique(weightsDF[weightsDF[,2] %in% viewedPages,1:2])
 pagesViewsBySimilarUsers <- aggregate(usersWhoViewedTheSomeOfThosePages[-1],usersWhoViewedTheSomeOfThosePages[1],c)
 pagesViewsBySimilarUsers$Count <- sapply(1:max(row(pagesViewsBySimilarUsers)),
