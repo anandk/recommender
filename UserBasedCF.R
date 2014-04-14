@@ -9,7 +9,7 @@ getRecommendations <- function(userPreferencesDF,     #data frame containing the
   weightColumn <- "weight"
   
   colnames(userPreferencesDF)<- c(userColumn,itemColumn,weightColumn)
-  viewedPages <- userPreferencesDF[which(userPreferencesDF[,userColumn]==targetUserID),itemColumn]
+  viewedPages <- userPreferencesDF[userPreferencesDF[,userColumn]==targetUserID,itemColumn]
   usersWhoViewedSomeOfThosePages <- unique(userPreferencesDF[userPreferencesDF[,itemColumn] %in% viewedPages,
                                                              c(userColumn,itemColumn)])
   pagesViewsBySimilarUsers <- aggregate(usersWhoViewedSomeOfThosePages[-1], #All the columns except the user column
@@ -62,4 +62,4 @@ getRecommendations <- function(userPreferencesDF,     #data frame containing the
 setwd("C:/TW-Projects/PS-Projects/AbcamAnalytics/RSandbox/recommender/")
 userItemsWeightsDF <- read.csv(file="FinalWeightsCombined",sep="\t",colClasses=c("character","character","numeric"),header=FALSE)
 targetUserID <- "-3685863687683693081"
-getRecommendations(userItemsWeightsDF,targetUserID)
+system.time(getRecommendations(userItemsWeightsDF,targetUserID))
