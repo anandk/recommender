@@ -22,13 +22,13 @@ getRecommendations <- function(userPreferencesDF,     #data frame containing the
   rankedUsersDF <- pagesViewsBySimilarUsers[order(pagesViewsBySimilarUsers$Count,decreasing=T),]
   rankedUsersDF <- rankedUsersDF[-1,]
   mostRelevantUsers <- rankedUsersDF[1:numRankedUsers,1]
-  pageViewDataOfTargetAndSimilarUsers <- userPreferencesDF[userPreferencesDF[,1] %in% c(targetUserID,mostRelevantUsers),]
+  pageViewDataOfTargetAndSimilarUsers <- userPreferencesDF[userPreferencesDF[,userColumn] %in% c(targetUserID,mostRelevantUsers),]
   tmpMatrix <- as(as(as(pageViewDataOfTargetAndSimilarUsers,"realRatingMatrix"),"dgCMatrix"),"matrix")
   relevantUsersPageViewsMX <- cbind(row.names(tmpMatrix),tmpMatrix)
   relevantUsersPageViewsMX <- relevantUsersPageViewsMX[order(relevantUsersPageViewsMX[,1]),]
   itemsViewedByRelevantUsers <- colnames(relevantUsersPageViewsMX)
-  allUniqueAbIDs <- unique(userPreferencesDF[,2])
-  abIDsNotViewedByRelevantUsers <- setdiff(unique(userPreferencesDF[,2]),itemsViewedByRelevantUsers)
+  allUniqueAbIDs <- unique(userPreferencesDF[,itemColumn])
+  abIDsNotViewedByRelevantUsers <- setdiff(unique(userPreferencesDF[,itemColumn]),itemsViewedByRelevantUsers)
   baseMX <- matrix(nrow=numRankedUsers+1, #Since we will also include target user
                    ncol=length(abIDsNotViewedByRelevantUsers),
                    data=0)  #Initialise
