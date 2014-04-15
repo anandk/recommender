@@ -20,4 +20,4 @@ distMatr <- dist(coOccuringItems[,-11],method="Manhattan",diag=T,upper=T)
 distances <- as.matrix(distMatr)[1,]
 matDistances <- as.matrix(distances)
 matDistances <- cbind(row.names(matDistances),matDistances)
-similarItems <- (matDistances[order(matDistances[,2]),])[2:11,1]
+similarItems <- (matDistances[order(matDistances[,2]),])[2:45,1]
