@@ -1,4 +1,5 @@
 library("recommenderlab")
+library("data.table")
 
 getRecommendations <- function(userPreferencesDF,     #data frame containing the user-items-weights
                                targetUser,            #user for whom recommendations are sought
@@ -8,27 +9,23 @@ getRecommendations <- function(userPreferencesDF,     #data frame containing the
   itemColumn <- "itemIDs"
   weightColumn <- "weight"
   
-  colnames(userPreferencesDF)<- c(userColumn,itemColumn,weightColumn)
-  viewedPages <- userPreferencesDF[userPreferencesDF[,userColumn]==targetUserID,itemColumn]
-  usersWhoViewedSomeOfThosePages <- unique(userPreferencesDF[userPreferencesDF[,itemColumn] %in% viewedPages,
-                                                             c(userColumn,itemColumn)])
-  pagesViewsBySimilarUsers <- aggregate(usersWhoViewedSomeOfThosePages[-1], #All the columns except the user column
-                                        usersWhoViewedSomeOfThosePages[1],  #Group by user ID
-                                        c)                                  #Concatenate all the item IDs per user
-  pagesViewsBySimilarUsers$Count <- sapply(1:max(row(pagesViewsBySimilarUsers)), #Do this for all relevant users
-                                           function(x){
-                                             return (length(unlist(pagesViewsBySimilarUsers[x,2])));
-                                           })
-  rankedUsersDF <- pagesViewsBySimilarUsers[order(pagesViewsBySimilarUsers$Count,decreasing=T),]
-  rankedUsersDF <- rankedUsersDF[-1,]
-  mostRelevantUsers <- rankedUsersDF[1:numRankedUsers,1]
-  pageViewDataOfTargetAndSimilarUsers <- userPreferencesDF[userPreferencesDF[,userColumn] %in% c(targetUserID,mostRelevantUsers),]
-  tmpMatrix <- as(as(as(pageViewDataOfTargetAndSimilarUsers,"realRatingMatrix"),"dgCMatrix"),"matrix")
+  userPreferencesDT <- data.table(userPreferencesDF)
+  
+  setnames(userPreferencesDT, c(userColumn,itemColumn,weightColumn))
+  setkey(userPreferencesDT, itemIDs)
+  
+  viewedPages <- userPreferencesDT[user==targetUserID][,itemIDs]
+  usersWhoViewedSomeOfThosePages <- userPreferencesDT[itemIDs %in% viewedPages][, list(user,itemIDs)]
+  pagesViewsBySimilarUsers <- usersWhoViewedSomeOfThosePages[,length(itemIDs),by=user]
+  rankedUsersDF <- pagesViewsBySimilarUsers[order(-V1)][-1,]
+  mostRelevantUsers <- rankedUsersDF[1:numRankedUsers,user]
+  pageViewDataOfTargetAndSimilarUsers <- userPreferencesDT[user %in% c(targetUserID,mostRelevantUsers),]
+  tmpMatrix <- as(as(as(data.frame(pageViewDataOfTargetAndSimilarUsers),"realRatingMatrix"),"dgCMatrix"),"matrix")
   relevantUsersPageViewsMX <- cbind(row.names(tmpMatrix),tmpMatrix)
   relevantUsersPageViewsMX <- relevantUsersPageViewsMX[order(relevantUsersPageViewsMX[,1]),]
   itemsViewedByRelevantUsers <- colnames(relevantUsersPageViewsMX)
-  allUniqueAbIDs <- unique(userPreferencesDF[,itemColumn])
-  abIDsNotViewedByRelevantUsers <- setdiff(unique(userPreferencesDF[,itemColumn]),itemsViewedByRelevantUsers)
+  allUniqueAbIDs <- userPreferencesDT[unique(itemIDs)]
+  abIDsNotViewedByRelevantUsers <- setdiff(allUniqueAbIDs,itemsViewedByRelevantUsers)
   baseMX <- matrix(nrow=numRankedUsers+1, #Since we will also include target user
                    ncol=length(abIDsNotViewedByRelevantUsers),
                    data=0)  #Initialise
@@ -62,4 +59,4 @@ getRecommendations <- function(userPreferencesDF,     #data frame containing the
 setwd("C:/TW-Projects/PS-Projects/AbcamAnalytics/RSandbox/recommender/")
 userItemsWeightsDF <- read.csv(file="FinalWeightsCombined",sep="\t",colClasses=c("character","character","numeric"),header=FALSE)
 targetUserID <- "-3685863687683693081"
-system.time(recomms <- getRecommendations(userItemsWeightsDF,targetUserID))
+system.time(getRecommendations(userItemsWeightsDF,targetUserID))
